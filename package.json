@@ -1,0 +1,17 @@
+{
+  "name": "blind-council",
+  "version": "0.1.0",
+  "description": "Multi-model debate with blind cross-examination and a dedicated judge seat. Five frontier models argue; one settles it.",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "council": "bun run src/council.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "typescript": "^7.0.2"
+  }
+}
