@@ -37,6 +37,8 @@ Failed seats (auth, quota, timeout) are flagged in the roster and excluded from 
 | Kai | DeepSeek V4 Pro | OpenRouter, local Ollama offline fallback |
 | **Fable (judge)** | Claude Fable 5 | `claude -p` subscription CLI first, OpenRouter fallback |
 
+This is the July 2026 lineup the code ships with. Model names move fast; swap in the current ones in `src/council.ts` before a serious convening.
+
 Every seat is a provider chain: the cheapest already-paid path first (a signed-in subscription CLI at zero marginal cost), the metered API as fallback. If you have Claude Code signed in, the Claude debater and the judge run free. If you have nothing but an OpenRouter key, everything still works. Edit `DEBATERS` and `JUDGE` in `src/council.ts` to change the roster; each seat is a few lines.
 
 API seats run at high reasoning effort, with automatic strip-and-retry if a provider rejects the reasoning parameter, plus retry on 429/5xx. Per-seat token and dollar telemetry lands in the roster, the JSON, and stderr. A full six-seat convening typically costs one to two dollars.
