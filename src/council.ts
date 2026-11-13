@@ -64,7 +64,7 @@ const CLAUDE_DISALLOWED_TOOLS = [
 
 type Usage = { inTok: number; outTok: number };
 
-type Reply = {
+export type Reply = {
   text: string;
   error?: string;
   via?: string;
@@ -123,34 +123,46 @@ function asNumber(v: unknown): number | undefined {
 //  - read-only grounding tools allowed; mutating/agentic tools disallowed
 //  - ANTHROPIC_API_KEY is stripped so the CLI uses the sub's OAuth, never a
 //    dead pay-per-use key
-async function askClaudeCli(model: string, prompt: string): Promise<Reply> {
+export async function askClaudeCli(model: string, prompt: string): Promise<Reply> {
   const via = "sub:claude";
   const env = { ...process.env };
   delete env.ANTHROPIC_API_KEY;
   delete env.ANTHROPIC_AUTH_TOKEN;
 
-  const proc = Bun.spawn(
-    [
-      "claude",
-      "-p",
-      "--model",
-      model,
-      "--output-format",
-      "json",
-      "--strict-mcp-config",
-      "--allowedTools",
-      ...CLAUDE_ALLOWED_TOOLS,
-      "--disallowedTools",
-      ...CLAUDE_DISALLOWED_TOOLS,
-    ],
-    {
-      cwd: NEUTRAL_CWD,
-      stdin: new TextEncoder().encode(prompt),
-      stdout: "pipe",
-      stderr: "pipe",
-      env,
-    },
-  );
+  // Bun.spawn throws when the executable cannot be started (not on PATH, or
+  // any other spawn error). That is an unavailable provider, same as a
+  // non-zero exit, and must not escape the seat.
+  const start = () =>
+    Bun.spawn(
+      [
+        "claude",
+        "-p",
+        "--model",
+        model,
+        "--output-format",
+        "json",
+        "--strict-mcp-config",
+        "--allowedTools",
+        ...CLAUDE_ALLOWED_TOOLS,
+        "--disallowedTools",
+        ...CLAUDE_DISALLOWED_TOOLS,
+      ],
+      {
+        cwd: NEUTRAL_CWD,
+        stdin: new TextEncoder().encode(prompt),
+        stdout: "pipe",
+        stderr: "pipe",
+        env,
+      },
+    );
+
+  let proc: ReturnType<typeof start>;
+  try {
+    proc = start();
+  } catch (e) {
+    const reason = (e instanceof Error ? e.message : String(e)).trim().slice(0, 200);
+    return { text: "", error: `claude cli not found or could not start: ${reason}`, via };
+  }
 
   const run = (async (): Promise<Reply> => {
     const [out, err, code] = await Promise.all([
@@ -205,16 +217,26 @@ async function askClaudeCli(model: string, prompt: string): Promise<Reply> {
 // Gemini CLI headless (subscription-backed, $0). Prints stack traces to stdout
 // on auth failure, so those are detected and treated as unavailable → chain
 // falls back to the API seat. Prompts here are argv-sized (debater rounds only).
-async function askGeminiCli(model: string | undefined, prompt: string): Promise<Reply> {
+export async function askGeminiCli(model: string | undefined, prompt: string): Promise<Reply> {
   const via = "sub:gemini";
   const args = ["-p", prompt];
   if (model) args.push("-m", model);
-  const proc = Bun.spawn(["gemini", ...args], {
-    cwd: NEUTRAL_CWD,
-    stdout: "pipe",
-    stderr: "pipe",
-    env: { ...process.env },
-  });
+  // Same as askClaudeCli: a spawn throw is an unavailable provider, not a crash.
+  const start = () =>
+    Bun.spawn(["gemini", ...args], {
+      cwd: NEUTRAL_CWD,
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env },
+    });
+
+  let proc: ReturnType<typeof start>;
+  try {
+    proc = start();
+  } catch (e) {
+    const reason = (e instanceof Error ? e.message : String(e)).trim().slice(0, 200);
+    return { text: "", error: `gemini cli not found or could not start: ${reason}`, via };
+  }
 
   const run = (async (): Promise<Reply> => {
     const [out, err, code] = await Promise.all([
@@ -502,10 +524,16 @@ function trackSpend(spend: Map<string, Spend>, name: string, reply: Reply): void
 }
 
 // Try each provider in order; return the first real reply, else the last error.
-async function ask(member: Member, prompt: string, spend: Map<string, Spend>): Promise<Reply> {
+export async function ask(member: Member, prompt: string, spend: Map<string, Spend>): Promise<Reply> {
   let lastError = "no providers configured";
   for (const step of member.chain) {
-    const reply = await step(prompt);
+    let reply: Reply;
+    try {
+      reply = await step(prompt);
+    } catch (e) {
+      const message = (e instanceof Error ? e.message : String(e)).slice(0, 200);
+      reply = { text: "", error: message };
+    }
     if (!reply.error && reply.text.trim().length > 0) {
       trackSpend(spend, member.name, reply);
       return reply;
