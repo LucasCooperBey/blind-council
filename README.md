@@ -58,6 +58,8 @@ Then a jump nav, then the full verdict, then the complete debate record as an ap
 Requires [Bun](https://bun.sh) and [pandoc](https://pandoc.org) (plus [typst](https://typst.app) if you want PDF output; HTML and Markdown work without it).
 
 ```bash
+git clone https://github.com/LucasCooperBey/blind-council
+cd blind-council
 bun install
 cp .env.example .env   # add your OpenRouter key
 bun run council "Should we build feature X or kill it?"
